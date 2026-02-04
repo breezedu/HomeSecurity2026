@@ -251,15 +251,6 @@ class HomeSecurityUI:
             if camera_info.get("enabled", True):
                 preview_label.bind("<Button-1>", lambda e, cam_idx=idx: self.open_camera_zoom(cam_idx))
             
-            # Camera info
-            info_text = f"IP: {camera_info['ip'] or 'Not found'}\n"
-            if camera_info.get('mac'):
-                info_text += f"MAC: {camera_info['mac']}\n"
-            info_text += f"Stream: {camera_info['stream']}"
-            
-            info_label = ttk.Label(camera_card, text=info_text, font=("Arial", 8))
-            info_label.pack()
-            
             # Status
             status_text = "● Disabled" if not camera_info.get("enabled", True) else "● Idle"
             status_color = "gray"
@@ -268,11 +259,20 @@ class HomeSecurityUI:
             status_label.pack(pady=5)
             self.status_labels[idx] = status_label
             
+            # Button frame for zoom and info buttons
+            button_frame = ttk.Frame(camera_card)
+            button_frame.pack(pady=5)
+            
             # Add zoom button (disabled if camera is off)
-            zoom_btn = ttk.Button(camera_card, text="🔍 View Full Screen", 
+            zoom_btn = ttk.Button(button_frame, text="🔍 View Full Screen", 
                                   command=lambda cam_idx=idx: self.open_camera_zoom(cam_idx),
                                   state="normal" if camera_info.get("enabled", True) else "disabled")
-            zoom_btn.pack(pady=5)
+            zoom_btn.pack(side="left", padx=2)
+            
+            # Add camera info button
+            info_btn = ttk.Button(button_frame, text="ℹ️ Camera Info", 
+                                  command=lambda cam_idx=idx: self.show_camera_info(cam_idx))
+            info_btn.pack(side="left", padx=2)
             
             # Store reference for updates
             if not hasattr(self, 'zoom_buttons'):
@@ -820,6 +820,167 @@ class HomeSecurityUI:
     def update_status_bar(self, message):
         """Update status bar message"""
         self.status_bar.config(text=message)
+    
+    def show_camera_info(self, camera_index):
+        """Show detailed camera information in a dialog"""
+        if camera_index >= len(self.camera_infos):
+            return
+        
+        camera_info = self.camera_infos[camera_index]
+        
+        # Create info dialog
+        info_dialog = tk.Toplevel(self.root)
+        info_dialog.title(f"Camera Information - {camera_info['name']}")
+        info_dialog.geometry("450x350")
+        info_dialog.resizable(False, False)
+        
+        # Main frame
+        main_frame = ttk.Frame(info_dialog, padding="20")
+        main_frame.pack(fill="both", expand=True)
+        
+        # Title
+        title_label = ttk.Label(main_frame, 
+                                text=f"📹 {camera_info['name']}", 
+                                font=("Arial", 14, "bold"))
+        title_label.pack(pady=(0, 15))
+        
+        # Information grid
+        info_frame = ttk.Frame(main_frame)
+        info_frame.pack(fill="both", expand=True)
+        
+        # Configure grid columns
+        info_frame.columnconfigure(1, weight=1)
+        
+        row = 0
+        
+        # Camera Name
+        ttk.Label(info_frame, text="Camera Name:", 
+                  font=("Arial", 9, "bold")).grid(row=row, column=0, sticky="w", pady=5, padx=(0, 10))
+        ttk.Label(info_frame, text=camera_info['name'], 
+                  font=("Arial", 9)).grid(row=row, column=1, sticky="w", pady=5)
+        row += 1
+        
+        # Status
+        status_text = "Enabled" if camera_info.get("enabled", True) else "Disabled"
+        status_color = "green" if camera_info.get("enabled", True) else "gray"
+        ttk.Label(info_frame, text="Status:", 
+                  font=("Arial", 9, "bold")).grid(row=row, column=0, sticky="w", pady=5, padx=(0, 10))
+        status_label = ttk.Label(info_frame, text=status_text, 
+                                 font=("Arial", 9), foreground=status_color)
+        status_label.grid(row=row, column=1, sticky="w", pady=5)
+        row += 1
+        
+        # Separator
+        ttk.Separator(info_frame, orient="horizontal").grid(row=row, column=0, columnspan=2, 
+                                                             sticky="ew", pady=10)
+        row += 1
+        
+        # IP Address
+        ttk.Label(info_frame, text="IP Address:", 
+                  font=("Arial", 9, "bold")).grid(row=row, column=0, sticky="w", pady=5, padx=(0, 10))
+        ip_text = camera_info.get('ip', 'Not found')
+        ip_label = ttk.Label(info_frame, text=ip_text, font=("Arial", 9))
+        ip_label.grid(row=row, column=1, sticky="w", pady=5)
+        row += 1
+        
+        # MAC Address
+        if camera_info.get('mac'):
+            ttk.Label(info_frame, text="MAC Address:", 
+                      font=("Arial", 9, "bold")).grid(row=row, column=0, sticky="w", pady=5, padx=(0, 10))
+            ttk.Label(info_frame, text=camera_info['mac'], 
+                      font=("Arial", 9)).grid(row=row, column=1, sticky="w", pady=5)
+            row += 1
+        
+        # Username
+        ttk.Label(info_frame, text="Username:", 
+                  font=("Arial", 9, "bold")).grid(row=row, column=0, sticky="w", pady=5, padx=(0, 10))
+        ttk.Label(info_frame, text=camera_info['username'], 
+                  font=("Arial", 9)).grid(row=row, column=1, sticky="w", pady=5)
+        row += 1
+        
+        # Stream Path
+        ttk.Label(info_frame, text="Stream Path:", 
+                  font=("Arial", 9, "bold")).grid(row=row, column=0, sticky="w", pady=5, padx=(0, 10))
+        ttk.Label(info_frame, text=camera_info['stream'], 
+                  font=("Arial", 9)).grid(row=row, column=1, sticky="w", pady=5)
+        row += 1
+        
+        # Separator
+        ttk.Separator(info_frame, orient="horizontal").grid(row=row, column=0, columnspan=2, 
+                                                             sticky="ew", pady=10)
+        row += 1
+        
+        # RTSP URL
+        ttk.Label(info_frame, text="RTSP URL:", 
+                  font=("Arial", 9, "bold")).grid(row=row, column=0, sticky="nw", pady=5, padx=(0, 10))
+        rtsp_url = f"rtsp://{camera_info['username']}:****@{camera_info.get('ip', 'unknown')}/{camera_info['stream']}"
+        rtsp_label = ttk.Label(info_frame, text=rtsp_url, 
+                               font=("Arial", 8), wraplength=250)
+        rtsp_label.grid(row=row, column=1, sticky="w", pady=5)
+        row += 1
+        
+        # Button frame
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(pady=(15, 0))
+        
+        # Copy IP button
+        def copy_ip():
+            info_dialog.clipboard_clear()
+            info_dialog.clipboard_append(camera_info.get('ip', ''))
+            messagebox.showinfo("Copied", f"IP address copied to clipboard:\n{camera_info.get('ip', '')}", 
+                               parent=info_dialog)
+        
+        ttk.Button(button_frame, text="📋 Copy IP", 
+                   command=copy_ip).pack(side="left", padx=5)
+        
+        # Test connection button
+        def test_connection():
+            test_btn.config(state="disabled", text="Testing...")
+            info_dialog.update()
+            
+            rtsp_url = f"rtsp://{camera_info['username']}:{camera_info['password']}@{camera_info.get('ip', '')}/{camera_info['stream']}"
+            
+            def test_thread():
+                cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
+                success = cap.isOpened()
+                if success:
+                    ret, frame = cap.read()
+                    success = ret
+                cap.release()
+                
+                # Update UI in main thread
+                info_dialog.after(0, lambda: show_result(success))
+            
+            def show_result(success):
+                test_btn.config(state="normal", text="🔌 Test Connection")
+                if success:
+                    messagebox.showinfo("Connection Test", 
+                                       "✅ Connection successful!\nCamera is reachable and streaming.", 
+                                       parent=info_dialog)
+                else:
+                    messagebox.showerror("Connection Test", 
+                                        "❌ Connection failed!\nCheck camera power, network, and credentials.", 
+                                        parent=info_dialog)
+            
+            threading.Thread(target=test_thread, daemon=True).start()
+        
+        test_btn = ttk.Button(button_frame, text="🔌 Test Connection", 
+                              command=test_connection)
+        test_btn.pack(side="left", padx=5)
+        
+        # Close button
+        ttk.Button(button_frame, text="✕ Close", 
+                   command=info_dialog.destroy).pack(side="left", padx=5)
+        
+        # Center the dialog
+        info_dialog.transient(self.root)
+        info_dialog.grab_set()
+        
+        # Center on parent window
+        info_dialog.update_idletasks()
+        x = self.root.winfo_x() + (self.root.winfo_width() // 2) - (info_dialog.winfo_width() // 2)
+        y = self.root.winfo_y() + (self.root.winfo_height() // 2) - (info_dialog.winfo_height() // 2)
+        info_dialog.geometry(f"+{x}+{y}")
     
     def open_camera_zoom(self, camera_index):
         """Open a zoomed/detailed view of a specific camera"""
