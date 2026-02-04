@@ -21,7 +21,8 @@ class HomeSecurityUI:
             "video_duration": 30 * 60,  # 30 minutes
             "target_directory": "./recorded_videos2026",
             "network_range": "192.168.1.0/24",
-            "json_path": "camera_information_mac.json"
+            "json_path": "camera_information_mac.json",
+            "retention_days": 21  # Keep videos for 21 days (3 weeks)
         }
         
         # State variables
@@ -481,10 +482,11 @@ class HomeSecurityUI:
                 end_time = time.time() + self.config["video_duration"]
                 video_path = self.create_target_directory(self.config["target_directory"])
                 
-                # Cleanup old recordings
+                # Cleanup old recordings based on retention setting
                 now = time.time()
-                three_weeks_ago = now - (3 * 7 * 24 * 60 * 60)
-                self.delete_old_subdirectories(self.config["target_directory"], three_weeks_ago)
+                retention_days = self.config.get("retention_days", 21)
+                cutoff_time = now - (retention_days * 24 * 60 * 60)
+                self.delete_old_subdirectories(self.config["target_directory"], cutoff_time)
                 
                 filename = self.get_video_filename(camera_index, camera_info['name'])
                 filepath = os.path.join(video_path, filename)
@@ -578,17 +580,19 @@ class HomeSecurityUI:
         os.makedirs(full_path, exist_ok=True)
         return full_path
     
-    def delete_old_subdirectories(self, directory, three_weeks_ago):
-        """Delete recordings older than 3 weeks"""
+    def delete_old_subdirectories(self, directory, cutoff_time):
+        """Delete recordings older than configured retention period"""
         if not os.path.exists(directory):
             return
+        
+        retention_days = self.config.get("retention_days", 21)
         
         for subdir in os.listdir(directory):
             subdir_path = os.path.join(directory, subdir)
             if os.path.isdir(subdir_path):
                 creation_time = os.path.getctime(subdir_path)
-                if creation_time < three_weeks_ago:
-                    self.log(f"Deleting old recordings: {subdir_path}")
+                if creation_time < cutoff_time:
+                    self.log(f"Deleting old recordings (>{retention_days} days): {subdir_path}")
                     shutil.rmtree(subdir_path)
     
     def get_video_filename(self, camera_index, camera_name):
@@ -725,17 +729,34 @@ class HomeSecurityUI:
         """Show settings dialog"""
         dialog = tk.Toplevel(self.root)
         dialog.title("Settings")
-        dialog.geometry("500x300")
+        dialog.geometry("550x400")
         
-        ttk.Label(dialog, text="Video Duration (minutes):").grid(row=0, column=0, padx=10, pady=10, sticky="w")
+        # Main frame with padding
+        main_frame = ttk.Frame(dialog, padding="20")
+        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        
+        # Configure grid
+        dialog.columnconfigure(0, weight=1)
+        dialog.rowconfigure(0, weight=1)
+        
+        row = 0
+        
+        # Video Duration
+        ttk.Label(main_frame, text="Video Duration (minutes):", 
+                  font=("Arial", 9)).grid(row=row, column=0, padx=10, pady=10, sticky="w")
         duration_var = tk.IntVar(value=self.config["video_duration"] // 60)
-        duration_entry = ttk.Entry(dialog, textvariable=duration_var, width=20)
-        duration_entry.grid(row=0, column=1, padx=10, pady=10)
+        duration_entry = ttk.Entry(main_frame, textvariable=duration_var, width=20)
+        duration_entry.grid(row=row, column=1, padx=10, pady=10, sticky="w")
+        ttk.Label(main_frame, text="(Default: 30)", 
+                  font=("Arial", 8), foreground="gray").grid(row=row, column=2, padx=5, pady=10, sticky="w")
+        row += 1
         
-        ttk.Label(dialog, text="Recording Directory:").grid(row=1, column=0, padx=10, pady=10, sticky="w")
-        dir_entry = ttk.Entry(dialog, width=30)
+        # Recording Directory
+        ttk.Label(main_frame, text="Recording Directory:", 
+                  font=("Arial", 9)).grid(row=row, column=0, padx=10, pady=10, sticky="w")
+        dir_entry = ttk.Entry(main_frame, width=35)
         dir_entry.insert(0, self.config["target_directory"])
-        dir_entry.grid(row=1, column=1, padx=10, pady=10)
+        dir_entry.grid(row=row, column=1, padx=10, pady=10, sticky="w")
         
         def browse_directory():
             directory = filedialog.askdirectory(initialdir=self.config["target_directory"])
@@ -743,22 +764,86 @@ class HomeSecurityUI:
                 dir_entry.delete(0, tk.END)
                 dir_entry.insert(0, directory)
         
-        ttk.Button(dialog, text="Browse", command=browse_directory).grid(row=1, column=2, padx=5, pady=10)
+        ttk.Button(main_frame, text="Browse", command=browse_directory).grid(row=row, column=2, padx=5, pady=10)
+        row += 1
         
-        ttk.Label(dialog, text="Network Range:").grid(row=2, column=0, padx=10, pady=10, sticky="w")
-        network_entry = ttk.Entry(dialog, width=30)
+        # Network Range
+        ttk.Label(main_frame, text="Network Range:", 
+                  font=("Arial", 9)).grid(row=row, column=0, padx=10, pady=10, sticky="w")
+        network_entry = ttk.Entry(main_frame, width=35)
         network_entry.insert(0, self.config["network_range"])
-        network_entry.grid(row=2, column=1, padx=10, pady=10)
+        network_entry.grid(row=row, column=1, padx=10, pady=10, sticky="w")
+        ttk.Label(main_frame, text="(For MAC scanning)", 
+                  font=("Arial", 8), foreground="gray").grid(row=row, column=2, padx=5, pady=10, sticky="w")
+        row += 1
+        
+        # Retention Days (NEW)
+        ttk.Label(main_frame, text="Keep Recordings For (days):", 
+                  font=("Arial", 9)).grid(row=row, column=0, padx=10, pady=10, sticky="w")
+        retention_var = tk.IntVar(value=self.config.get("retention_days", 21))
+        retention_entry = ttk.Entry(main_frame, textvariable=retention_var, width=20)
+        retention_entry.grid(row=row, column=1, padx=10, pady=10, sticky="w")
+        ttk.Label(main_frame, text="(Default: 21)", 
+                  font=("Arial", 8), foreground="gray").grid(row=row, column=2, padx=5, pady=10, sticky="w")
+        row += 1
+        
+        # Separator
+        ttk.Separator(main_frame, orient="horizontal").grid(row=row, column=0, columnspan=3, 
+                                                             sticky="ew", pady=15)
+        row += 1
+        
+        # Info label
+        info_text = "Note: Old recordings are automatically deleted when retention period expires.\nDeletion occurs when a new recording starts."
+        ttk.Label(main_frame, text=info_text, 
+                  font=("Arial", 8), foreground="gray", 
+                  justify="left").grid(row=row, column=0, columnspan=3, padx=10, pady=5, sticky="w")
+        row += 1
         
         def save_settings():
-            self.config["video_duration"] = duration_var.get() * 60
-            self.config["target_directory"] = dir_entry.get()
-            self.config["network_range"] = network_entry.get()
-            self.log("Settings updated")
-            messagebox.showinfo("Settings", "Settings saved successfully!")
-            dialog.destroy()
+            # Validate inputs
+            try:
+                duration = duration_var.get()
+                retention = retention_var.get()
+                
+                if duration < 1:
+                    messagebox.showerror("Invalid Input", "Video duration must be at least 1 minute.", parent=dialog)
+                    return
+                
+                if retention < 1:
+                    messagebox.showerror("Invalid Input", "Retention period must be at least 1 day.", parent=dialog)
+                    return
+                
+                # Save settings
+                self.config["video_duration"] = duration * 60
+                self.config["target_directory"] = dir_entry.get()
+                self.config["network_range"] = network_entry.get()
+                self.config["retention_days"] = retention
+                
+                self.log(f"Settings updated - Duration: {duration}min, Retention: {retention} days")
+                messagebox.showinfo("Settings", 
+                                   f"Settings saved successfully!\n\n"
+                                   f"• Video Duration: {duration} minutes\n"
+                                   f"• Retention Period: {retention} days\n"
+                                   f"• Recordings older than {retention} days will be deleted", 
+                                   parent=dialog)
+                dialog.destroy()
+            except ValueError:
+                messagebox.showerror("Invalid Input", "Please enter valid numbers for duration and retention.", parent=dialog)
         
-        ttk.Button(dialog, text="Save", command=save_settings).grid(row=3, column=0, columnspan=3, pady=20)
+        # Buttons frame
+        button_frame = ttk.Frame(main_frame)
+        button_frame.grid(row=row, column=0, columnspan=3, pady=20)
+        
+        ttk.Button(button_frame, text="Save", command=save_settings, width=15).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Cancel", command=dialog.destroy, width=15).pack(side="left", padx=5)
+        
+        # Center dialog on parent
+        dialog.transient(self.root)
+        dialog.grab_set()
+        dialog.update_idletasks()
+        x = self.root.winfo_x() + (self.root.winfo_width() // 2) - (dialog.winfo_width() // 2)
+        y = self.root.winfo_y() + (self.root.winfo_height() // 2) - (dialog.winfo_height() // 2)
+        dialog.geometry(f"+{x}+{y}")
     
     def open_recordings_folder(self):
         """Open the recordings folder in file explorer"""
